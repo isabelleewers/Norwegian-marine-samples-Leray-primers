@@ -60,9 +60,9 @@ load_raw_occurrence_data <- function(filename){
 ```
 
 
-### preliminary checks and filtering
+## preliminary checks and filtering
 
-here we go:
+here we go!
 
 ```{r}
 load_raw_occurrence_data(input) -> raw_table
@@ -89,25 +89,122 @@ bacteria:
 raw_table %>%
     filter(! is.na(superkingdom_name) &
            ! superkingdom_name %in% non_protists) %>%
-    select(id, starts_with("FD0")) -> protists_table
+    select(id, starts_with("FD0")) %>%
+        pivot_longer(cols = starts_with("FD0"),
+                 names_to = "samples",
+                 values_to = "reads",
+                 values_drop_na = TRUE) -> protists_table
+
+rm(raw_table)
 ```
 
 compute the number of reads per sample:
 
 ```{r}
 protists_table %>%
-    pivot_longer(cols = starts_with("FD0"),
-                 names_to = "samples",
-                 values_to = "reads",
-                 values_drop_na = TRUE) %>%
     count(samples, wt = reads, name = "reads", sort = TRUE) %>%
     filter(reads < min_number_of_reads) %>%
-    summarise(n()) %>%
-    pull() -> number_of_small_samples
+    select(samples) %>%
+    pull() -> list_of_small_samples
+
+length(list_of_small_samples) -> number_of_small_samples
 ```
 
 there are `r prettyNum(number_of_small_samples, scientific=FALSE, big.mark=",")`
 samples with less than `r prettyNum(min_number_of_reads, scientific=FALSE, big.mark=",")` reads.
+
+eliminate small samples and make a transposed table in wide format:
+
+```{r}
+protists_table %>%
+    filter(! samples %in% list_of_small_samples) %>%
+    pivot_wider(names_from = "samples",
+                values_from = "reads",
+                values_fill = 0) -> protists_table_reduced
+
+protists_table_reduced %>%
+    select(id) -> OTU_ids
+
+protists_table_reduced %>%
+    select(-id) %>%
+    t() -> protists_table_transposed
+```
+
+
+## rarefaction (random subsampling)
+
+Randomly subsample the table, so all samples have the same number of
+reads. Repeat the process `r n_subsamplings` times to make sure that
+the final profile is as close as possible to the initial
+distribution. Use a fix seed to make the process 100% repeatable. That
+step can take several minutes to run.
+
+
+```{r}
+set.seed(seed)
+matrix1 <- vegan::rrarefy(protists_table_transposed, min_number_of_reads)
+for (i in 2:n_subsamplings) {
+    matrix1 <- matrix1 + vegan::rrarefy(protists_table_transposed, min_number_of_reads)
+}
+
+matrix1 / n_subsamplings -> protists_table_transposed_rarefied
+
+rm(i, seed, n_subsamplings, matrix1, list_of_small_samples,
+   protists_table_transposed)
+```
+
+Prepare to remove empty OTUs from the final rarefied table:
+
+```{r}
+. %>%
+    pivot_longer(cols = starts_with("FD0"),
+                 names_to = "samples",
+                 values_to = "reads") %>%
+    filter(reads > 0) %>%
+    group_by(id) %>%
+    mutate(total = sum(reads),
+           spread = n()) %>%
+    ungroup() %>%
+    pivot_wider(names_from = samples,
+                values_from = reads,
+                values_fill = 0) %>%
+    filter(total > 0) -> remove_empty_OTUs
+```
+
+
+Rebuild and save the newly rarefied OTU table:
+
+```{r}
+bind_cols(OTU_ids,
+          protists_table_transposed_rarefied %>%
+          t() %>%
+          as.data.frame() %>%
+          as_tibble()) %>%
+    remove_empty_OTUs -> protists_table_rarefied
+
+protists_table_rarefied %>%
+    write_tsv(file = here::here("data", rarefied_table))
+```
+
+How many reads per sample in the final table?
+
+```{r}
+protists_table_rarefied %>%
+    pivot_longer(cols = starts_with("FD0"),
+                 names_to = "samples",
+                 values_to = "reads") %>%
+    count(samples, wt = reads, name = "reads") %>%
+    summary()
+
+ls()
+
+rm(OTU_ids, protists_table, protists_table_rarefied, protists_table_transposed_rarefied)
+```
+
+As expected, there are now
+ `r prettyNum(min_number_of_reads, scientific=FALSE, big.mark=",")`
+ reads in all samples.
+
 
 
 ***
