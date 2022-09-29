@@ -1,0 +1,94 @@
+---
+title: " Norwegian Marine Samples COI (#1) "
+author: "Frédéric Mahé"
+date: '`r format(Sys.time(), "%d %B %Y")`'
+
+output:
+  rmarkdown::html_document:
+    theme: lumen
+    toc: yes
+    toc_float: TRUE
+    keep_md: yes
+    # code_folding: hide
+---
+
+```{r setup, include=FALSE}
+rm(list = ls()) # remove all objects before starting
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+***
+
+#### load required packages
+
+```{r packages, message=FALSE}
+library(here)
+library(tidyverse)
+library(vegan)
+```
+
+
+# checks, taxonomic filtering, and subsampling
+
+## variables and functions
+
+```{r}
+input <- "FDIR.Curated_LULU_20210729.csv"
+rarefied_table <- str_replace(input, ".csv", "_protists_rarefied.csv")
+min_target_size <- 10000  # minimal number of reads
+number_of_rows <- 39796
+seed <- 123
+n_subsamplings <- 100
+```
+
+Force `dplyr` to read all the rows of the input table before guessing
+the type of each column. Otherwise, the wrong type will be guessed for
+some samples (`logical` instead of `double`). A more elegant solution
+would be to indicate that all columns starting with `FD01_` to `FD04_`
+are samples and should be interpreted as `double`, but that's not yet
+possible with `dplyr`.
+
+```{r}
+load_raw_occurrence_data <- function(filename){
+    here::here("data", filename) %>%
+        read_delim(delim = ";",
+                   na = c("0", "", "NA"),
+                   guess_max = number_of_rows,
+                   show_col_types = FALSE)
+}
+```
+
+
+### preliminary checks
+
+Remove unassigned entries and entries not assigned to protists:
+
+```{r}
+load_raw_occurrence_data(input) -> d
+
+
+## how many reads per superkingdom?
+d %>%
+    pivot_longer(cols = starts_with("FD0"),
+                 names_to = "samples",
+                 values_to = "reads",
+                 values_drop_na = TRUE) %>%
+    count(superkingdom_name, wt = reads, name = "reads")
+
+
+non_protists <- c("Archaeplastida", "Opisthokonta", "Prokaryota", "NA")
+
+## compute reads per super-kingdom
+d %>%
+    distinct(superkingdom_name)
+```
+
+How many reads in total?
+
+
+***
+
+```{r}
+sessionInfo()
+rm(list = ls())
+```
