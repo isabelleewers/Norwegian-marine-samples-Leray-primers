@@ -36,7 +36,8 @@ library(vegan)
 input <- "FDIR.Curated_LULU_20210729.csv"
 rarefied_table <- str_replace(input, ".csv", "_protists_rarefied.csv")
 min_target_size <- 10000  # minimal number of reads
-number_of_rows <- 39796
+non_protists <- c("Archaeplastida", "Opisthokonta", "Prokaryota")
+min_number_of_reads <- 1000
 seed <- 123
 n_subsamplings <- 100
 ```
@@ -53,37 +54,60 @@ load_raw_occurrence_data <- function(filename){
     here::here("data", filename) %>%
         read_delim(delim = ";",
                    na = c("0", "", "NA"),
-                   guess_max = number_of_rows,
+                   guess_max = Inf,
                    show_col_types = FALSE)
 }
 ```
 
 
-### preliminary checks
+### preliminary checks and filtering
 
-Remove unassigned entries and entries not assigned to protists:
+here we go:
 
 ```{r}
-load_raw_occurrence_data(input) -> d
+load_raw_occurrence_data(input) -> raw_table
+```
 
+how many reads per superkingdom?
 
-## how many reads per superkingdom?
-d %>%
+```{r}
+raw_table %>%
     pivot_longer(cols = starts_with("FD0"),
                  names_to = "samples",
                  values_to = "reads",
                  values_drop_na = TRUE) %>%
-    count(superkingdom_name, wt = reads, name = "reads")
-
-
-non_protists <- c("Archaeplastida", "Opisthokonta", "Prokaryota", "NA")
-
-## compute reads per super-kingdom
-d %>%
-    distinct(superkingdom_name)
+    count(superkingdom_name, wt = reads, name = "reads") %>%
+    mutate(percentage = 100 * reads / sum(reads))
 ```
 
-How many reads in total?
+note the number of unassigned reads (`NA`), or reads assigned to
+`Prokaryota` (are these alphaproteobacteria?). The next step is to
+eliminate unassigned OTUs and OTUs assigned to plants, animals and
+bacteria:
+
+```{r}
+raw_table %>%
+    filter(! is.na(superkingdom_name) &
+           ! superkingdom_name %in% non_protists) %>%
+    select(id, starts_with("FD0")) -> protists_table
+```
+
+compute the number of reads per sample:
+
+```{r}
+protists_table %>%
+    pivot_longer(cols = starts_with("FD0"),
+                 names_to = "samples",
+                 values_to = "reads",
+                 values_drop_na = TRUE) %>%
+    count(samples, wt = reads, name = "reads", sort = TRUE) %>%
+    filter(reads < min_number_of_reads) %>%
+    summarise(n()) %>%
+    pull() -> number_of_small_samples
+```
+
+there are `r prettyNum(number_of_small_samples, scientific=FALSE, big.mark=",")`
+samples with less than `r prettyNum(min_number_of_reads, scientific=FALSE, big.mark=",")` reads.
 
 
 ***
