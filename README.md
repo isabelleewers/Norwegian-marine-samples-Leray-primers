@@ -20,8 +20,10 @@ base packages.
 - [ ] data check,
 - [ ] filtering (only protists),
 - [ ] rarefaction,
-- [ ] beta diversity,
-- for each taxonomic group in Dino, Diatoms, Haptophyta, Red Algae:
+- [ ] beta diversity
+
+for each taxonomic group in Dino, Diatoms, Haptophyta, Red Algae:
+
 - [ ] filtering (only the target taxonomic group),
 - [ ] rarefaction,
 - [ ] beta diversity
