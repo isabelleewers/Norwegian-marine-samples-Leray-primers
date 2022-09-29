@@ -34,12 +34,14 @@ library(vegan)
 
 ```{r}
 input <- "FDIR.Curated_LULU_20210729.csv"
+title <- "Norwegian marine samples COI NMDS"
 rarefied_table <- str_replace(input, ".csv", "_protists_rarefied.csv")
 min_target_size <- 10000  # minimal number of reads
 non_protists <- c("Archaeplastida", "Opisthokonta", "Prokaryota")
 min_number_of_reads <- 1000
 seed <- 123
 n_subsamplings <- 100
+cbPalette <- c("#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7")
 ```
 
 Force `dplyr` to read all the rows of the input table before guessing
@@ -149,7 +151,7 @@ for (i in 2:n_subsamplings) {
 
 matrix1 / n_subsamplings -> protists_table_transposed_rarefied
 
-rm(i, seed, n_subsamplings, matrix1, list_of_small_samples,
+rm(i, n_subsamplings, matrix1, list_of_small_samples,
    protists_table_transposed)
 ```
 
@@ -196,14 +198,102 @@ protists_table_rarefied %>%
     count(samples, wt = reads, name = "reads") %>%
     summary()
 
-ls()
-
-rm(OTU_ids, protists_table, protists_table_rarefied, protists_table_transposed_rarefied)
+rm(OTU_ids, protists_table, protists_table_rarefied)
 ```
 
 As expected, there are now
  `r prettyNum(min_number_of_reads, scientific=FALSE, big.mark=",")`
  reads in all samples.
+
+
+## NMDS
+
+### computation
+
+rename for readability:
+
+```{r}
+occurrences_t <- protists_table_transposed_rarefied
+```
+
+Bray-Curtis dissimilarity matrix:
+
+```{r}
+occurrences_t.bray <- vegan::vegdist(occurrences_t, method = "bray")
+```
+
+NMDS ordination:
+
+```{r}
+set.seed(seed)
+occurrences_t.bray.nmds <- vegan::metaMDS(occurrences_t.bray)
+```
+
+### prepare results
+
+extract data scores and add stress value:
+
+```{r}
+stress <- occurrences_t.bray.nmds$stress
+samples <- rownames(occurrences_t)
+data.scores <- as.data.frame(vegan::scores(occurrences_t.bray.nmds,
+                                           display = "sites"))
+data.scores$samples <- rownames(data.scores)
+
+x_min <- min(data.scores$NMDS1)
+y_max <- max(data.scores$NMDS2)
+stress_annotation <- paste("stress: ", round(stress, digits = 4), sep = "")
+```
+
+parse sample names:
+
+```{r}
+data.scores %>%
+    separate(col = samples, into = c("locality", "junk", "sample"), sep = "_") -> d
+```
+
+### plot
+
+```{r}
+ggplot(data = d,
+       aes(x = NMDS1, y = NMDS2, fill = locality)) +
+    scale_fill_manual(values = cbPalette) +
+    scale_colour_manual(values = cbPalette) +
+    geom_point(size = 6, shape = 21, colour = "black", stroke = 0.5) +
+    theme_bw(base_size = 16) +
+    ggtitle(title) +
+    annotate("text", x = x_min + abs(x_min / 8),
+             y = y_max, label = stress_annotation) -> nmds_plot
+
+nmds_plot
+```
+
+No obvious structuration.
+
+Add ellipses representing t-distributions (solid lines) and normal
+distributions (dashed lines):
+
+```{r}
+nmds_plot +
+    stat_ellipse(aes(colour = locality), type = "norm", linetype = 2) +
+    stat_ellipse(aes(colour = locality), type = "t", linetype = 1)
+```
+
+The t-distribution, also known as Student's t-distribution, is a type
+of normal distribution used for smaller sample sizes, where the
+variance in the data is unknown.
+
+
+Clean up:
+
+```{r}
+rm(data.scores, input, nmds_plot,
+   occurrences_t, occurrences_t.bray, occurrences_t.bray.nmds,
+   samples, stress, stress_annotation, title, useful_metadata, x_min,
+   y_max)
+
+ls()
+```
 
 
 
