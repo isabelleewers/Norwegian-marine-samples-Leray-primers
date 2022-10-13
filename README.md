@@ -17,10 +17,14 @@ base packages.
 
 **Roadmap**:
 
-- [ ] data check,
-- [ ] filtering (only protists),
-- [ ] rarefaction,
-- [ ] beta diversity
+- [ ] update R,
+- [ ] install Rtools,
+- [ ] update RStudio,
+- [ ] update R packages,
+- [x] data check,
+- [x] filtering (only protists),
+- [x] rarefaction,
+- [x] beta diversity
 
 for each taxonomic group in Dino, Diatoms, Haptophyta, Red Algae:
 
