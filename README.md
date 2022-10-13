@@ -17,6 +17,8 @@ base packages.
 
 **Roadmap**:
 
+- [ ] create a GitHub account,
+- [ ] install git,
 - [ ] update R,
 - [ ] install Rtools,
 - [ ] update RStudio,
