@@ -36,7 +36,6 @@ library(vegan)
 input <- "FDIR.Curated_LULU_20210729.csv"
 title <- "Norwegian marine samples COI NMDS"
 rarefied_table <- str_replace(input, ".csv", "_protists_rarefied.csv")
-min_target_size <- 10000  # minimal number of reads
 non_protists <- c("Archaeplastida", "Opisthokonta", "Prokaryota")
 min_number_of_reads <- 1000
 seed <- 123
