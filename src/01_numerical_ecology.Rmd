@@ -140,7 +140,6 @@ the final profile is as close as possible to the initial
 distribution. Use a fix seed to make the process 100% repeatable. That
 step can take several minutes to run.
 
-
 ```{r}
 set.seed(seed)
 matrix1 <- vegan::rrarefy(protists_table_transposed, min_number_of_reads)
@@ -171,7 +170,6 @@ Prepare to remove empty OTUs from the final rarefied table:
                 values_fill = 0) %>%
     filter(total > 0) -> remove_empty_OTUs
 ```
-
 
 Rebuild and save the newly rarefied OTU table:
 
@@ -228,6 +226,7 @@ set.seed(seed)
 occurrences_t.bray.nmds <- vegan::metaMDS(occurrences_t.bray)
 ```
 
+
 ### prepare results
 
 extract data scores and add stress value:
@@ -250,6 +249,7 @@ parse sample names:
 data.scores %>%
     separate(col = samples, into = c("locality", "junk", "sample"), sep = "_") -> d
 ```
+
 
 ### plot
 
@@ -293,7 +293,6 @@ rm(data.scores, input, nmds_plot,
 
 ls()
 ```
-
 
 
 ***
