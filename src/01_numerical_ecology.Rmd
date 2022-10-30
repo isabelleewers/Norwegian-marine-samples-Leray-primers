@@ -55,7 +55,7 @@ load_raw_occurrence_data <- function(filename){
     here::here("data", filename) %>%
         read_delim(delim = ";",
                    na = c("0", "", "NA"),
-                   guess_max = Inf,
+                   guess_max = 39000,
                    show_col_types = FALSE)
 }
 ```
