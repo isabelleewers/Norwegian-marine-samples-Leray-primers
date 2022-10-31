@@ -203,6 +203,18 @@ As expected, there are now
  reads in all samples.
 
 
+## Alpha diversity
+
+Shannon index **H** (richness + evenness):
+
+```{r}
+protists_table_transposed_rarefied %>%
+    vegan::diversity(., index = "shannon")
+```
+
+then...
+
+
 ## NMDS
 
 ### local functions
