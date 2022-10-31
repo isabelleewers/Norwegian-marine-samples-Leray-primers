@@ -17,19 +17,21 @@ base packages.
 
 **Roadmap**:
 
-- [ ] create a GitHub account,
-- [ ] install git,
-- [ ] update R,
-- [ ] install Rtools,
-- [ ] update RStudio,
-- [ ] update R packages,
+- [x] create a GitHub account,
+- [x] install git,
+- [x] update R,
+- [x] install Rtools,
+- [x] update RStudio,
+- [x] update R packages,
 - [x] data check,
 - [x] filtering (only protists),
 - [x] rarefaction,
 - [x] beta diversity
+- [ ] alpha diversity
 
 for each taxonomic group in Dino, Diatoms, Haptophyta, Red Algae:
 
 - [ ] filtering (only the target taxonomic group),
 - [ ] rarefaction,
+- [ ] alpha diversity,
 - [ ] beta diversity
