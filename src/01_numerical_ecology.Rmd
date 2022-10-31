@@ -205,25 +205,36 @@ As expected, there are now
 
 ## NMDS
 
+### local functions
+
+```{r}
+. %>%
+    vegan::vegdist(., method = "bray") %>%
+    vegan::metaMDS(.) -> compute_NMDS_coordinates
+
+. %>%
+    vegan::scores(., display = "sites") %>%
+    as.data.frame() %>%
+    rownames_to_column(var = "samples") %>%
+    separate(col = samples,
+             into = c("locality", "junk", "sample"),
+             sep = "_") -> extract_NMDS_coordinates
+
+. %>%
+    round(., digits = 4) %>%
+    paste("stress: ", ., sep = "") -> format_stress_annotation
+```
+
+
 ### computation
 
-rename for readability:
-
-```{r}
-occurrences_t <- protists_table_transposed_rarefied
-```
-
-Bray-Curtis dissimilarity matrix:
-
-```{r}
-occurrences_t.bray <- vegan::vegdist(occurrences_t, method = "bray")
-```
-
-NMDS ordination:
+Dissimilarity (Bray-Curtis) and ordination (NMDS):
 
 ```{r}
 set.seed(seed)
-occurrences_t.bray.nmds <- vegan::metaMDS(occurrences_t.bray)
+
+protists_table_transposed_rarefied %>%
+    compute_NMDS_coordinates -> occurrences_t.bray.nmds
 ```
 
 
@@ -232,29 +243,26 @@ occurrences_t.bray.nmds <- vegan::metaMDS(occurrences_t.bray)
 extract data scores and add stress value:
 
 ```{r}
-stress <- occurrences_t.bray.nmds$stress
-samples <- rownames(occurrences_t)
-data.scores <- as.data.frame(vegan::scores(occurrences_t.bray.nmds,
-                                           display = "sites"))
-data.scores$samples <- rownames(data.scores)
+occurrences_t.bray.nmds %>%
+    extract_NMDS_coordinates -> data.scores
 
-x_min <- min(data.scores$NMDS1)
-y_max <- max(data.scores$NMDS2)
-stress_annotation <- paste("stress: ", round(stress, digits = 4), sep = "")
-```
-
-parse sample names:
-
-```{r}
 data.scores %>%
-    separate(col = samples, into = c("locality", "junk", "sample"), sep = "_") -> d
+    select(NMDS1) %>%
+    min() -> x_min
+
+data.scores %>%
+    select(NMDS2) %>%
+    max() -> y_max
+
+occurrences_t.bray.nmds$stress %>%
+    format_stress_annotation -> stress_annotation
 ```
 
 
 ### plot
 
 ```{r}
-ggplot(data = d,
+ggplot(data = data.scores,
        aes(x = NMDS1, y = NMDS2, fill = locality)) +
     scale_fill_manual(values = cbPalette) +
     scale_colour_manual(values = cbPalette) +
@@ -286,12 +294,8 @@ variance in the data is unknown.
 Clean up:
 
 ```{r}
-rm(data.scores, input, nmds_plot,
-   occurrences_t, occurrences_t.bray, occurrences_t.bray.nmds,
-   samples, stress, stress_annotation, title, useful_metadata, x_min,
-   y_max)
-
-ls()
+rm(data.scores, input, nmds_plot, occurrences_t.bray.nmds,
+   stress_annotation, title, x_min, y_max)
 ```
 
 
