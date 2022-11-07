@@ -209,7 +209,11 @@ Shannon index **H** (richness + evenness):
 
 ```{r}
 protists_table_transposed_rarefied %>%
-    vegan::diversity(., index = "shannon")
+    vegan::diversity(., index = "shannon") %>%
+    as.data.frame() %>%
+    rownames_to_column(var = "samples") %>%
+    rename(shannon = 2) %>%
+    summary()
 ```
 
 then...
