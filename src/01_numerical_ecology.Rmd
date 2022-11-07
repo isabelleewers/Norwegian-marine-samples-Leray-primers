@@ -214,6 +214,17 @@ protists_table_transposed_rarefied %>%
     rownames_to_column(var = "samples") %>%
     rename(shannon = 2) %>%
     summary()
+
+
+protists_table_transposed_rarefied %>%
+    vegan::diversity(., index = "invsimpson")
+
+protists_table_transposed_rarefied %>%
+    vegan::specnumber(.)
+
+protists_table_transposed_rarefied %>%
+    round(.) %>%
+    vegan::estimateR(.)
 ```
 
 then...
