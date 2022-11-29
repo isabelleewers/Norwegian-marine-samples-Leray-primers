@@ -1,0 +1,120 @@
+---
+title: " rarefaction toy-example "
+author: "Frédéric Mahé"
+date: '`r format(Sys.time(), "%d %B %Y")`'
+
+output:
+  rmarkdown::html_document:
+    theme: lumen
+    toc: yes
+    toc_float: TRUE
+    keep_md: yes
+    # code_folding: hide
+---
+
+```{r setup, include=FALSE}
+rm(list = ls()) # remove all objects before starting
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+***
+
+#### load required packages
+
+```{r packages, message=FALSE}
+library(tidyverse)
+library(vegan)
+```
+
+
+# checks, taxonomic filtering, and subsampling
+
+## variables and functions
+
+```{r}
+fake_abundances <- c(30, 20, 10, 5, 5, 1, 1, 1, 1, 0)
+min_number_of_reads <- 20
+seed <- 123
+n_subsamplings <- 100
+```
+
+
+## preliminary checks and filtering
+
+here we go!
+
+```{r}
+tibble(s1 = fake_abundances) %>%
+    t() -> raw_table_transposed
+```
+
+There is one sample with `r fake_abundances %>% sum(.) %>%
+prettyNum(., scientific=FALSE, big.mark=",")` reads.
+
+
+## rarefaction (random subsampling)
+
+Randomly subsample the table, so all samples have the same number of
+reads. Repeat the process `r n_subsamplings` times to make sure that
+the final profile is as close as possible to the initial
+distribution. Use a fix seed to make the process 100% repeatable. That
+step can take several minutes to run.
+
+```{r}
+set.seed(seed)
+
+## rarefy once
+raw_table_transposed %>%
+    vegan::rrarefy(x = ., sample = min_number_of_reads) -> matrix1
+
+matrix1
+
+## compute stats
+matrix1 %>%
+    vegan::estimateR(x = .)
+matrix1 %>%
+    vegan::specnumber(x = .)
+
+
+## averaged rarefaction
+for (i in 2:n_subsamplings) {
+    matrix1 <- matrix1 + vegan::rrarefy(x = raw_table_transposed,
+                                        sample = min_number_of_reads)
+}
+
+matrix1 / n_subsamplings -> raw_table_transposed_rarefied
+
+
+raw_table_transposed_rarefied
+
+## stats after rounding
+raw_table_transposed_rarefied %>%
+    round(x = .) %>%
+    vegan::estimateR(x = .)
+
+raw_table_transposed_rarefied %>%
+    round(x = .) %>%
+    vegan::specnumber(x = .)
+
+## stats after decimal shifting
+(raw_table_transposed_rarefied * n_subsamplings) %>%
+    vegan::estimateR(x = .)
+
+(raw_table_transposed_rarefied * n_subsamplings) %>%
+    vegan::specnumber(x = .)
+
+```
+
+Keep `matrix1` as reference
+
+perform estimateR 100 times, compute an average value for each and
+compare with the value estimated from the averaged rarefied table.
+
+
+
+***
+
+```{r}
+sessionInfo()
+rm(list = ls())
+```
