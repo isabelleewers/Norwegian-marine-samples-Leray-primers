@@ -32,11 +32,54 @@ library(vegan)
 ## variables and functions
 
 ```{r}
-fake_abundances <- c(30, 20, 10, 5, 5, 1, 1, 1, 1, 0)
-min_number_of_reads <- 20
+fake_abundances <- c(30, 20, 15, 10, 7, 5, 5, 3, 2, 1, 1, 1, 0)
+min_number_of_reads <- 10
 seed <- 123
-n_subsamplings <- 100
+n_subsamplings <- 1000
 ```
+
+```{r}
+rarefy_n_times <- function(transposed_table, sample_size, n) {
+    set.seed(seed)
+
+    transposed_table %>%
+        vegan::rrarefy(x = .,
+                       sample = sample_size) -> local_matrix
+
+    for (i in 2:n) {
+        local_matrix <-
+            local_matrix +
+            vegan::rrarefy(x = transposed_table,
+                           sample = sample_size)
+    }
+
+    return(local_matrix / n)
+}
+
+diversity_index_n_times <- function(transposed_table, sample_size, n, diversity_index) {
+    set.seed(seed)
+
+    transposed_table %>%
+        vegan::rrarefy(x = .,
+                       sample = sample_size) %>%
+        vegan::diversity(x = .,
+                         index = diversity_index) -> index_value
+
+    for (i in 2:n) {
+        transposed_table %>%
+            vegan::rrarefy(x = .,
+                           sample = sample_size) %>%
+            vegan::diversity(x = .,
+                             index = diversity_index) -> local_index_value
+
+        index_value <- index_value + local_index_value
+    }
+
+    return(index_value / n)
+}
+```
+
+
 
 
 ## preliminary checks and filtering
@@ -51,65 +94,235 @@ tibble(s1 = fake_abundances) %>%
 There is one sample with `r fake_abundances %>% sum(.) %>%
 prettyNum(., scientific=FALSE, big.mark=",")` reads.
 
+As we rarefy to `r min_number_of_reads %>% prettyNum(.,
+scientific=FALSE, big.mark=",")` we would expect our fake abundance values to be divided by `r (fake_abundances %>% sum(.) / min_number_of_reads) %>% prettyNum(., scientific=FALSE, big.mark=",")`:
+
+
+```{r}
+tibble(s1 = fake_abundances) %>%
+    mutate(s1 = s1 / (sum(s1) / min_number_of_reads)) %>%
+    pull() -> expected_abundance_values_after_rarefaction
+```
+
+Let's see how close we can get with an *averaged rarefaction*.
+ 
 
 ## rarefaction (random subsampling)
 
 Randomly subsample the table, so all samples have the same number of
 reads. Repeat the process `r n_subsamplings` times to make sure that
 the final profile is as close as possible to the initial
-distribution. Use a fix seed to make the process 100% repeatable. That
-step can take several minutes to run.
+distribution. Use a fix seed to make the process 100% repeatable.
+
+### rarefy once
+
+Keep `matrix1` as a reference:
 
 ```{r}
 set.seed(seed)
 
-## rarefy once
 raw_table_transposed %>%
-    vegan::rrarefy(x = ., sample = min_number_of_reads) -> matrix1
+    vegan::rrarefy(x = .,
+                   sample = min_number_of_reads) -> matrix1
 
-matrix1
-
-## compute stats
-matrix1 %>%
-    vegan::estimateR(x = .)
-matrix1 %>%
-    vegan::specnumber(x = .)
-
-
-## averaged rarefaction
-for (i in 2:n_subsamplings) {
-    matrix1 <- matrix1 + vegan::rrarefy(x = raw_table_transposed,
-                                        sample = min_number_of_reads)
-}
-
-matrix1 / n_subsamplings -> raw_table_transposed_rarefied
-
-
-raw_table_transposed_rarefied
-
-## stats after rounding
-raw_table_transposed_rarefied %>%
-    round(x = .) %>%
-    vegan::estimateR(x = .)
-
-raw_table_transposed_rarefied %>%
-    round(x = .) %>%
-    vegan::specnumber(x = .)
-
-## stats after decimal shifting
-(raw_table_transposed_rarefied * n_subsamplings) %>%
-    vegan::estimateR(x = .)
-
-(raw_table_transposed_rarefied * n_subsamplings) %>%
-    vegan::specnumber(x = .)
-
+matrix1 -> first_rarefaction
 ```
 
-Keep `matrix1` as reference
+How far are we from our expectations?
 
-perform estimateR 100 times, compute an average value for each and
-compare with the value estimated from the averaged rarefied table.
+```{r}
+first_rarefaction %>%
+    t() %>%
+    as_tibble() %>%
+    pull()
 
+expected_abundance_values_after_rarefaction %>%
+    round(x = .)
+```
+
+Close but the fact that rarefaction is inherently a random process is
+obvious. We might want to limit random dispersion by computing *n*
+independent rarefaction, adding them and dividing by *n* to get
+averaged rarefaction results. Doing so produces tables of decimal
+values, rather than integral values. A potential issue is that
+diversity toolboxes such as `vegan` may not accept and process decimal
+values correctly.
+
+We need to verify if diversity toolboxes such as vegan can compute
+alpha- and beta-diversity stats using decimal decimal values, or if it
+is necessary to round up the abundance values.
+
+We already know that `vegan::estimateR()` requires integral values,
+and that `vegan::specnumber()` overestimates the number of species
+when given decimal values. So rounding is already necessary for some
+stats.
+
+A potential issue is that rounding slightly changes the actual number
+of reads per sample.
+
+
+### rarefy *n* times and compute average
+
+```{r}
+rarefy_n_times(transposed_table = raw_table_transposed,
+               sample_size = min_number_of_reads,
+               n = n_subsamplings) -> raw_table_transposed_rarefied
+```
+
+How far are we from our expectations?
+
+```{r}
+raw_table_transposed_rarefied %>%
+    t() %>%
+    as_tibble() %>%
+    pull() -> averaged_rarefied_values
+
+averaged_rarefied_values
+
+averaged_rarefied_values %>%
+    round(x = .)
+
+expected_abundance_values_after_rarefaction %>%
+    round(x = .)
+```
+
+The more repeats, the closer we are.
+
+Notice that the sum of reads is correct before rounding up, but
+smaller than expected after `round()`:
+
+```{r}
+averaged_rarefied_values %>%
+    sum()
+
+averaged_rarefied_values %>%
+    round(x = .) %>%
+    sum()
+```
+
+As stated previously, this is a potential issue for beta-diversity
+analysis.
+
+
+### compute alpha-diversity stats
+
+#### estimateR
+
+```{r}
+first_rarefaction %>%
+    vegan::estimateR(x = .)
+
+raw_table_transposed_rarefied %>%
+    round(x = .) %>%
+    vegan::estimateR(x = .)
+```
+
+Rounding is mandatory. Results between a single-rarefaction and an
+averaged rarefaction are close.
+
+
+#### specnumber
+
+```{r}
+first_rarefaction %>%
+    vegan::specnumber(x = .)
+
+raw_table_transposed_rarefied %>%
+    vegan::specnumber(x = .)
+
+raw_table_transposed_rarefied %>%
+    round(x = .) %>%
+    vegan::specnumber(x = .)
+```
+
+Rounding is not mandatory, but necessary.
+
+
+#### diversity
+
+Here we introduce the `diversity_index_n_times()` function that can
+rarefy a matrix and compute a diversity index *n* times independently,
+and finally return an average value. This is our most precise
+evaluation of the true index value.
+
+
+Shannon:
+
+```{r}
+first_rarefaction %>%
+    vegan::diversity(., index = "shannon")
+
+raw_table_transposed_rarefied %>%
+    vegan::diversity(., index = "shannon")
+
+raw_table_transposed_rarefied %>%
+    round(x = .) %>%
+    vegan::diversity(., index = "shannon")
+
+diversity_index_n_times(transposed_table = raw_table_transposed,
+                        sample_size = min_number_of_reads,
+                        n = n_subsamplings,
+                        diversity_index = "shannon")
+```
+
+Results with the averaged rounded table are very close to the results
+computed independently *n* times and averaged (more expensive
+computation).
+
+
+Inverse Simpson:
+
+```{r}
+first_rarefaction %>%
+    vegan::diversity(., index = "invsimpson")
+
+raw_table_transposed_rarefied %>%
+    vegan::diversity(., index = "invsimpson")
+
+raw_table_transposed_rarefied %>%
+    round(x = .) %>%
+    vegan::diversity(., index = "invsimpson")
+
+diversity_index_n_times(transposed_table = raw_table_transposed,
+                        sample_size = min_number_of_reads,
+                        n = n_subsamplings,
+                        diversity_index = "invsimpson")
+```
+
+Results with the averaged rounded table are very close to the results
+computed independently *n* times and averaged (more expensive
+computation).
+
+
+### conclusion
+
+Results with the averaged rounded table are valid, at least for
+alpha-diversity.
+
+
+
+### long-term solution
+
+A potential solution could be to rarefy n times (or to divide
+abundances by a factor), then to round-up, then to rarefy again only
+once on the size of the smallest sample. That process would yield a
+table of integers, very close to the optimal rarefaction, with the
+same number of reads in all samples.
+
+
+### not-so-good solutions
+
+Decimal shifting (multiple by a factor): 
+
+```{r}
+(raw_table_transposed_rarefied * n_subsamplings) %>%
+    vegan::estimateR(x = .)
+
+(raw_table_transposed_rarefied * n_subsamplings) %>%
+    vegan::specnumber(x = .)
+```
+
+Inflation of the number of species, not good.
 
 
 ***
