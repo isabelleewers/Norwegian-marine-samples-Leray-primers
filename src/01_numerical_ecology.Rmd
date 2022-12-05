@@ -209,23 +209,26 @@ Shannon index **H** (richness + evenness):
 
 ```{r}
 protists_table_transposed_rarefied %>%
+    round() %>%
     vegan::diversity(., index = "shannon") %>%
     as.data.frame() %>%
     rownames_to_column(var = "samples") %>%
     rename(shannon = 2) -> protist_table_shannon
 
 protists_table_transposed_rarefied %>%
+    round() %>%
     vegan::diversity(., index = "invsimpson") %>%
     as.data.frame() %>%
     rownames_to_column(var = "samples") %>%
     rename(invsimpson = 2) -> protist_table_invsimpson
 
 protists_table_transposed_rarefied %>%
+    round() %>%
     vegan::specnumber(.) %>%
     as.data.frame() %>%
     rownames_to_column(var = "samples") %>%
     rename(specnumber = 2) -> protist_table_specnumber
-print(protist_table_specnumber)
+
 
 merge(protist_table_shannon, protist_table_invsimpson) -> shannon_simpson
 merge(shannon_simpson, protist_table_specnumber) -> table_shannon_simpson_specnumber
@@ -250,6 +253,7 @@ combined_FD_sha_inv_spec <- rbind(
   mutate(FD03_sha_inv_spec, category = "FD03_samples"),
   mutate(FD04_sha_inv_spec, category = "FD04_samples")
 )
+
 ggplot(data = combined_FD_sha_inv_spec,
        aes(x = samples, y = shannon)) + 
   geom_point(aes(color = category)) +
@@ -259,6 +263,7 @@ ggplot(data = combined_FD_sha_inv_spec,
   facet_wrap(~category, scales = "free_x") +
   xlab("Samples") +
   ylab("Shannon Index")
+
 ggplot(data = combined_FD_sha_inv_spec,
        aes(x = samples, y = invsimpson)) + 
   geom_point(aes(color = category)) +
@@ -268,6 +273,7 @@ ggplot(data = combined_FD_sha_inv_spec,
   facet_wrap(~category, scales = "free_x") +
   xlab("Samples") +
   ylab("Inverse Simpson Index")
+
 ggplot(data = combined_FD_sha_inv_spec,
        aes(x = samples, y = specnumber)) + 
   geom_col(color = "black", aes(fill = category)) +
@@ -277,69 +283,7 @@ ggplot(data = combined_FD_sha_inv_spec,
   facet_wrap(~category, scales = "free_x") +
   xlab("Samples") +
   ylab("Number of Species")
-
-
-## manually compute the number of observed species
-protists_table_transposed_rarefied %>%
-    t() %>%
-    as.data.frame() %>%
-    as_tibble() %>%
-    pivot_longer(cols = everything(),
-                 names_to = "samples",
-                 values_to = "reads") %>%
-    filter(reads > 0) %>%
-    count(samples)
-
-
-## workaround the rounding issue
-tmp <- protists_table_transposed_rarefied * 100
-
-tmp %>%
-    round(.) %>%
-    vegan::estimateR(.) %>%
-    t() %>%
-    as.data.frame() %>%
-    rownames_to_column(var = "samples") -> protist_table_observed_estimated_species
-
-rm(tmp)
-
-print(protist_table_observed_estimated_species)
-
-protist_table_observed_estimated_species %>%
-    filter(., str_detect(samples, "FD01")) -> FD01_subset
-summary(FD01_subset)
-protist_table_observed_estimated_species %>%
-    filter(., str_detect(samples, "FD02")) -> FD02_subset
-summary(FD02_subset)
-protist_table_observed_estimated_species %>%
-    filter(., str_detect(samples, "FD03")) -> FD03_subset
-summary(FD03_subset)
-protist_table_observed_estimated_species %>%
-    filter(., str_detect(samples, "FD04")) -> FD04_subset
-summary(FD04_subset)
-
-combined_FD_subsets <- rbind(
-  mutate(FD01_subset, category = "FD01_samples"),
-  mutate(FD02_subset, category = "FD02_samples"),
-  mutate(FD03_subset, category = "FD03_samples"),
-  mutate(FD04_subset, category = "FD04_samples")
-)
-ggplot(data = combined_FD_subsets,
-       aes(x = samples, y = S.obs)) +
-      geom_col(color = "black", aes(fill = "Observed number of species")) +
-      scale_fill_manual(values = c("orange2")) +
-      geom_point(size = 3, aes(y = S.chao1, color = "Estimated number of species")) +
-      geom_errorbar(aes(ymin = S.chao1-se.chao1, ymax = S.chao1+se.chao1)) +
-      scale_color_manual(values = c("skyblue"),
-                         name = NULL) +
-      scale_x_discrete(labels = NULL) +
-      theme_bw() + 
-      facet_wrap(~category, scales = "free_x") +
-      xlab("Samples") +
-      ylab("Species Number")
 ```
-
-then...
 
 
 ## NMDS
