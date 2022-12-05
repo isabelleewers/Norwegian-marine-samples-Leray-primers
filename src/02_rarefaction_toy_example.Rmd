@@ -27,7 +27,7 @@ library(vegan)
 ```
 
 
-# checks, taxonomic filtering, and subsampling
+# preliminary checks
 
 ## variables and functions
 
@@ -56,6 +56,7 @@ rarefy_n_times <- function(transposed_table, sample_size, n) {
     return(local_matrix / n)
 }
 
+
 diversity_index_n_times <- function(transposed_table, sample_size, n, diversity_index) {
     set.seed(seed)
 
@@ -77,12 +78,23 @@ diversity_index_n_times <- function(transposed_table, sample_size, n, diversity_
 
     return(index_value / n)
 }
+
+
+dissimilarity_n_times <- function(transposed_table, sample_size, n, diversity_index) {
+    set.seed(seed)
+
+    replicate(n = n,
+              expr = transposed_table %>%
+                  vegan::rrarefy(x = ., sample = sample_size) %>%
+                  vegan::vegdist(x = ., index = diversity_index)) %>%
+        sum() -> local_sum
+
+    return(local_sum / n)
+}
 ```
 
 
-
-
-## preliminary checks and filtering
+## data creation and preliminary checks
 
 here we go!
 
@@ -107,14 +119,14 @@ tibble(s1 = fake_abundances) %>%
 Let's see how close we can get with an *averaged rarefaction*.
  
 
-## rarefaction (random subsampling)
+# rarefaction (random subsampling)
 
 Randomly subsample the table, so all samples have the same number of
 reads. Repeat the process `r n_subsamplings` times to make sure that
 the final profile is as close as possible to the initial
 distribution. Use a fix seed to make the process 100% repeatable.
 
-### rarefy once
+## rarefy once
 
 Keep `matrix1` as a reference:
 
@@ -161,7 +173,7 @@ A potential issue is that rounding slightly changes the actual number
 of reads per sample.
 
 
-### rarefy *n* times and compute average
+## rarefy *n* times and compute average
 
 ```{r}
 rarefy_n_times(transposed_table = raw_table_transposed,
@@ -204,9 +216,9 @@ As stated previously, this is a potential issue for beta-diversity
 analysis.
 
 
-### compute alpha-diversity stats
+# compute alpha-diversity stats
 
-#### estimateR
+## estimateR
 
 ```{r}
 first_rarefaction %>%
@@ -221,7 +233,16 @@ Rounding is mandatory. Results between a single-rarefaction and an
 averaged rarefaction are close.
 
 
-#### specnumber
+```{r}
+raw_table_transposed %>%
+    vegan::estimateR(x = .)
+```
+
+Working directly with the original non-rarefied data gives different
+results, as expected.
+
+
+## specnumber
 
 ```{r}
 first_rarefaction %>%
@@ -238,7 +259,7 @@ raw_table_transposed_rarefied %>%
 Rounding is not mandatory, but necessary.
 
 
-#### diversity
+## diversity
 
 Here we introduce the `diversity_index_n_times()` function that can
 rarefy a matrix and compute a diversity index *n* times independently,
@@ -246,7 +267,7 @@ and finally return an average value. This is our most precise
 evaluation of the true index value.
 
 
-Shannon:
+### Shannon
 
 ```{r}
 first_rarefaction %>%
@@ -263,14 +284,37 @@ diversity_index_n_times(transposed_table = raw_table_transposed,
                         sample_size = min_number_of_reads,
                         n = n_subsamplings,
                         diversity_index = "shannon")
+
+raw_table_transposed %>%
+    vegan::diversity(x = ., index = "shannon")
 ```
 
 Results with the averaged rounded table are very close to the results
 computed independently *n* times and averaged (more expensive
 computation).
 
+```{r}
+raw_table_transposed %>%
+    vegan::diversity(x = ., index = "shannon")
 
-Inverse Simpson:
+raw_table_transposed_rarefied %>%
+    vegan::diversity(., index = "shannon")
+```
+
+The original non-rarefied data and the rarefied averaged non-rounded
+data are close. This is expected: without rounding the two
+distributions are the same, just scaled differently (see below). It
+also shows that the `vegan::diversity()` function accepts real
+numbers.
+
+```{r}
+raw_table_transposed
+
+raw_table_transposed_rarefied
+```
+
+
+### Inverse Simpson
 
 ```{r}
 first_rarefaction %>%
@@ -287,21 +331,100 @@ diversity_index_n_times(transposed_table = raw_table_transposed,
                         sample_size = min_number_of_reads,
                         n = n_subsamplings,
                         diversity_index = "invsimpson")
+
+raw_table_transposed %>%
+    vegan::diversity(x = ., index = "invsimpson")
 ```
 
 Results with the averaged rounded table are very close to the results
 computed independently *n* times and averaged (more expensive
 computation).
 
-
-### conclusion
-
-Results with the averaged rounded table are valid, at least for
-alpha-diversity.
+```{r}
+rm(raw_table_transposed)
+```
 
 
+## conclusion
 
-### long-term solution
+Results obtained with the rarefied-averaged rounded table are valid,
+at least for alpha-diversity.
+
+
+# compute beta-diversity stats
+
+Create a toy-example with two dissimilar samples:
+
+```{r}
+tibble(s1 = fake_abundances,
+       s2 = rev(fake_abundances)) %>%
+    t() -> raw_table_transposed
+```
+
+Bray-Curtis dissimilarity with and without rarefaction:
+
+without rarefaction:
+
+```{r}
+raw_table_transposed %>%
+    vegan::vegdist(x = ., method = "bray")
+```
+
+with *n* independent rarefactions and dissimilarity assessments:
+
+```{r}
+dissimilarity_n_times(transposed_table = raw_table_transposed,
+                      sample_size = min_number_of_reads,
+                      n = n_subsamplings,
+                      diversity_index = "bray")
+```
+
+with *n* independent rarefactions and one dissimilarity assessment, without and with rounding:
+
+```{r}
+rarefy_n_times(transposed_table = raw_table_transposed,
+               sample_size = min_number_of_reads,
+               n = n_subsamplings) -> raw_table_transposed_rarefied
+```
+
+```{r}
+raw_table_transposed_rarefied %>%
+    vegan::vegdist(x = ., method = "bray")
+
+raw_table_transposed_rarefied %>%
+    round() %>%
+    vegan::vegdist(x = ., method = "bray")
+```
+
+## conclusion
+
+- as expected, rarefaction reduces precision on the measured
+  dissimilarity (0.79 -> 0.8919),
+- rarefying and averaging dissimilarities, without rounding, yields a
+  dissimilarity value close to the one obtained on the original
+  non-rarefied data (0.79 vs 0.7916),
+- with rounding, rarefying and averaging dissimilarities yields a
+  higher (maximal) dissimilarity value of 1.0. After rarefaction, our
+  fake samples do not overlap, so a maximal dissimilarity is expected,
+- when running more independent rarefactions and dissimilarity
+  assessments, the observed average dissimilarity value seems to
+  remain stable around 0.89
+
+Now, what should we do? Rarefaction brings a lot of issues, but it is
+necessary for now if we want to compare samples. So, it seems that the
+ideal way is to repeat *n* independent rarefactions and diversity
+assessments, at least for alpha statistics). This is computationally
+costly. Our recently introduced strategy of averaging *n* independent
+rarefactions saves some computation time, but introduces new
+difficulties. However, rarefying and averaging dissimilarities without
+rounding, yields a dissimilarity value close to the one obtained on
+the original non-rarefied data.
+
+In short: results obtained with the rarefied-averaged **not** rounded
+table are valid, at least for the Bray-Curtis dissimilarity.
+
+
+## long-term solution?
 
 A potential solution could be to rarefy n times (or to divide
 abundances by a factor), then to round-up, then to rarefy again only
@@ -310,7 +433,7 @@ table of integers, very close to the optimal rarefaction, with the
 same number of reads in all samples.
 
 
-### not-so-good solutions
+# not-so-good solutions
 
 Decimal shifting (multiple by a factor): 
 
