@@ -27,7 +27,7 @@ base packages.
 - [x] filtering (only protists),
 - [x] rarefaction,
 - [x] beta diversity
-- [ ] alpha diversity
+- [x] alpha diversity
 
 for each taxonomic group in Dino, Diatoms, Haptophyta, Red Algae:
 
